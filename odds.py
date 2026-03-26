@@ -58,6 +58,13 @@ def get_mvp_odds() -> dict:
         logger.info("Using Action Network for MVP odds")
         return an_result
 
+    # Try FanDuel GraphQL
+    import fanduel_odds
+    fd_result = fanduel_odds.get_al_mvp_odds()
+    if fd_result:
+        logger.info("Using FanDuel for MVP odds")
+        return fd_result
+
     logger.info("No MVP odds available from any source")
     return _empty_response("No active futures market found")
 
