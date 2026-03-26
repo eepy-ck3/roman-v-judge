@@ -131,7 +131,10 @@
       <div class="card">
         <div class="card-header">
           <h2>MVP Odds</h2>
-          <span class="text-xs text-muted">American odds · implied probability</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="text-xs text-muted">American odds · implied probability</span>
+            <button class="btn btn-primary text-xs" onclick="refreshOdds(this)">↻ Refresh</button>
+          </div>
         </div>
         <div class="card-body">
           <div class="mvp-odds-grid">

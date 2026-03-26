@@ -222,6 +222,14 @@ class ManualOddsUpdate(BaseModel):
     roman_odds: str
 
 
+@app.post("/api/odds/refresh")
+async def refresh_odds():
+    """Force a fresh fetch from The Odds API by busting the cache."""
+    cache_module.invalidate("get_mvp_odds")
+    fresh = odds_module.get_mvp_odds()
+    return fresh
+
+
 @app.post("/api/odds/manual")
 async def update_odds_manually(update: ManualOddsUpdate):
     """

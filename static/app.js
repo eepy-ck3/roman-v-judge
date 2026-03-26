@@ -481,6 +481,23 @@ function renderChart(trendData, metric) {
 
 // ─── Manual Odds Update ───────────────────────────────────────────────────────
 
+async function refreshOdds(btn) {
+  const original = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+  try {
+    const odds = await fetchJSON('/api/odds/refresh');
+    renderOddsPanel(odds);
+    const src = odds.judge?.source === 'odds_api' ? 'Live odds loaded!' : 'Refreshed — using manual fallback (API had no futures market)';
+    showToast(src, odds.judge?.source === 'odds_api' ? 'success' : 'error');
+  } catch (e) {
+    showToast('Failed to refresh odds', 'error');
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+
 async function updateOddsManually() {
   const judgeOdds = document.getElementById('manual-judge-odds')?.value?.trim();
   const romanOdds = document.getElementById('manual-roman-odds')?.value?.trim();
