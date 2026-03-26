@@ -390,6 +390,31 @@ body {
 .game-result.win  { color: var(--win-color); }
 .game-result.loss { color: var(--lose-color); }
 
+/* NEW: Career vs. Pitcher stats sub-line under each upcoming game */
+.game-row-upcoming {
+  align-items: flex-start;
+  padding: 10px 0;
+}
+
+.career-vs {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.career-vs-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.career-vs-none {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .game-stats {
   font-size: 0.7rem;
   color: var(--text-secondary);

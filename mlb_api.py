@@ -6,6 +6,9 @@ It's undocumented but well-known in the sabermetrics community.
 Docs/community reference: https://github.com/toddrob99/MLB-StatsAPI
 
 Key limitation: WAR and wRC+ are NOT available here — those come from fangraphs_api.py
+
+NEW: Career batter vs. pitcher stats via the vsPlayer endpoint.
+Endpoint: /api/v1/people/{batterId}/stats?stats=vsPlayer&opposingPlayerId={pitcherId}&group=hitting
 """
 import requests
 import logging
@@ -19,7 +22,6 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://statsapi.mlb.com/api/v1"
 HEADSHOT_URL = "https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/{player_id}/headshot/67/current"
 
-# Requests session with a timeout — don't let flaky API responses hang the app
 _session = requests.Session()
 _session.headers.update({"User-Agent": "RomanVsJudgeBetTracker/1.0"})
 REQUEST_TIMEOUT = 10
@@ -39,10 +41,7 @@ def _get(endpoint: str, params: dict = None) -> Optional[dict]:
 
 @cached(ttl=CACHE_TTL_STATS)
 def get_player_info(player_id: int) -> Optional[dict]:
-    """
-    Basic player info: name, position, team, jersey number, headshot.
-    Cached for 15 min — this data barely changes.
-    """
+    """Basic player info: name, position, team, jersey number, headshot."""
     data = _get(f"/people/{player_id}", {"hydrate": "currentTeam"})
     if not data or not data.get("people"):
         return None
@@ -66,25 +65,21 @@ def get_player_info(player_id: int) -> Optional[dict]:
 
 @cached(ttl=CACHE_TTL_STATS)
 def get_season_stats(player_id: int, season: int = None) -> Optional[dict]:
-    """
-    Full season batting stats from MLB Stats API.
-    Returns the stats dict or None if unavailable (e.g., player is in minors).
-    """
+    """Full season batting stats. Returns empty stats object if unavailable (minors, pre-debut)."""
     s = season or SEASON
     data = _get(f"/people/{player_id}/stats", {
         "stats": "season",
         "season": s,
         "group": "hitting",
-        "sportId": 1,  # MLB only, not MiLB
+        "sportId": 1,
     })
 
     if not data:
         return None
 
-    # Dig into the nested response structure
     stats_list = data.get("stats", [])
     if not stats_list or not stats_list[0].get("splits"):
-        logger.info(f"No season stats for player {player_id} in {s} — might be in minors or pre-debut")
+        logger.info(f"No season stats for player {player_id} in {s}")
         return _empty_stats()
 
     raw = stats_list[0]["splits"][0]["stat"]
@@ -95,11 +90,10 @@ def get_season_stats(player_id: int, season: int = None) -> Optional[dict]:
 def get_game_log(player_id: int, season: int = None) -> list[dict]:
     """
     Game-by-game log for the season. Used for:
-    - Last 5 game results
-    - Weekly stat calculations
-    - Building trend chart data
-
-    Returns a list of game dicts, most recent first.
+    - Last 5 game results panel
+    - Weekly stat calculations for the email report
+    - Building cumulative trend chart data
+    Returns most recent games first.
     """
     s = season or SEASON
     data = _get(f"/people/{player_id}/stats", {
@@ -125,7 +119,6 @@ def get_game_log(player_id: int, season: int = None) -> list[dict]:
         team_score = split.get("team", {}).get("score")
         opp_score = split.get("opponent", {}).get("score")
 
-        # Build W/L result string
         result = "—"
         if team_score is not None and opp_score is not None:
             win = team_score > opp_score
@@ -139,19 +132,79 @@ def get_game_log(player_id: int, season: int = None) -> list[dict]:
             **_parse_hitting_stats(stat)
         })
 
-    # Most recent first
     games.sort(key=lambda g: g["date"], reverse=True)
     return games
 
 
+# NEW: Career vs. Pitcher stats ───────────────────────────────────────────────
+
 @cached(ttl=CACHE_TTL_SCHEDULE)
-def get_schedule(team_id: int, days_ahead: int = 7, days_back: int = 5) -> dict:
+def get_career_vs_pitcher(batter_id: int, pitcher_id: int) -> Optional[dict]:
     """
-    Returns upcoming games and recent results for a team.
-    Hydrates with probable pitcher data where available.
+    Career batting stats for a batter against a specific pitcher.
+
+    Uses the MLB Stats API vsPlayer endpoint:
+      /api/v1/people/{batterId}/stats?stats=vsPlayer&opposingPlayerId={pitcherId}&group=hitting
+
+    Returns a stats dict if career data exists, or None if they've never faced each other
+    (common for rookies like Roman Anthony, or brand-new pitchers).
+
+    Edge cases handled:
+    - Empty splits → return None (renders as "No career history" in UI)
+    - Roman Anthony specifically will return None for most pitchers (2025 rookie)
+    - Rookie pitchers with no MLB innings → empty splits, same None return
+    - Mid-series pitching changes: we show the ANNOUNCED starter's career stats.
+      If the starter gets pulled before facing our batter, the data is still valid
+      as a scouting note.
+    """
+    data = _get(f"/people/{batter_id}/stats", {
+        "stats": "vsPlayer",
+        "opposingPlayerId": pitcher_id,
+        "group": "hitting",
+        "sportId": 1,
+    })
+
+    if not data:
+        return None
+
+    stats_list = data.get("stats", [])
+    if not stats_list or not stats_list[0].get("splits"):
+        return None  # No career matchup data — show "No history" in UI
+
+    raw = stats_list[0]["splits"][0]["stat"]
+
+    # Only return data if there's at least 1 AB — otherwise it's noise
+    ab = raw.get("atBats", 0)
+    if ab == 0:
+        return None
+
+    return {
+        "ab": ab,
+        "hits": raw.get("hits", 0),
+        "hr": raw.get("homeRuns", 0),
+        "rbi": raw.get("rbi", 0),
+        "k": raw.get("strikeOuts", 0),
+        "bb": raw.get("baseOnBalls", 0),
+        "avg": raw.get("avg", ".000"),
+        "obp": raw.get("obp", ".000"),
+        "slg": raw.get("slg", ".000"),
+        "ops": raw.get("ops", ".000"),
+    }
+
+
+# ─── Schedule (upcoming only) ─────────────────────────────────────────────────
+
+@cached(ttl=CACHE_TTL_SCHEDULE)
+def get_schedule(team_id: int, days_ahead: int = 7) -> dict:
+    """
+    Returns upcoming games for a team with probable pitcher data.
+
+    EDIT 2: Removed 'recent results' — the schedule panel now shows upcoming games only.
+    Recent game-by-game stats are in get_game_log(), which powers the separate
+    "Last 5 Games" panel and the weekly email report.
     """
     today = date.today()
-    start = (today - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    start = today.strftime("%Y-%m-%d")
     end = (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
     data = _get("/schedule", {
@@ -159,40 +212,31 @@ def get_schedule(team_id: int, days_ahead: int = 7, days_back: int = 5) -> dict:
         "startDate": start,
         "endDate": end,
         "sportId": 1,
-        "hydrate": "probablePitcher,linescore,team",
+        "hydrate": "probablePitcher,team",
     })
 
     if not data:
-        return {"upcoming": [], "recent": []}
+        return {"upcoming": []}
 
     upcoming = []
-    recent = []
     today_str = today.strftime("%Y-%m-%d")
 
     for date_entry in data.get("dates", []):
         game_date = date_entry.get("date", "")
         for game in date_entry.get("games", []):
+            # Skip doubleheader game 2 if game 1 is already in the list for that date
             parsed = _parse_game(game, team_id, game_date)
-            if parsed:
-                if game_date >= today_str and parsed.get("status") not in ("Final", "Game Over"):
-                    upcoming.append(parsed)
-                else:
-                    recent.append(parsed)
+            if parsed and parsed.get("status") not in ("Final", "Game Over"):
+                upcoming.append(parsed)
 
-    # Sort and limit
     upcoming.sort(key=lambda g: g["date"])
-    recent.sort(key=lambda g: g["date"], reverse=True)
-
-    return {
-        "upcoming": upcoming[:5],
-        "recent": recent[:5]
-    }
+    return {"upcoming": upcoming[:5]}
 
 
 def get_weekly_stats(player_id: int, days: int = 7) -> Optional[dict]:
     """
     Calculates accumulated stats for the past `days` days from the game log.
-    This is used for the weekly email report.
+    Used by the weekly email report scheduler.
     """
     game_log = get_game_log(player_id)
     if not game_log:
@@ -204,7 +248,6 @@ def get_weekly_stats(player_id: int, days: int = 7) -> Optional[dict]:
     if not weekly_games:
         return _empty_stats()
 
-    # Accumulate counting stats
     totals = {
         "games": len(weekly_games),
         "ab": sum(g.get("ab", 0) for g in weekly_games),
@@ -219,7 +262,6 @@ def get_weekly_stats(player_id: int, days: int = 7) -> Optional[dict]:
         "k": sum(g.get("k", 0) for g in weekly_games),
     }
 
-    # Recalculate rate stats from totals
     ab = totals["ab"]
     hits = totals["hits"]
     bb = totals["bb"]
@@ -230,7 +272,6 @@ def get_weekly_stats(player_id: int, days: int = 7) -> Optional[dict]:
     totals["avg"] = f"{hits/ab:.3f}" if ab > 0 else ".000"
     totals["obp"] = f"{(hits + bb) / pa:.3f}" if pa > 0 else ".000"
     totals["slg"] = f"{tb / ab:.3f}" if ab > 0 else ".000"
-
     obp_val = float(totals["obp"])
     slg_val = float(totals["slg"])
     totals["ops"] = f"{obp_val + slg_val:.3f}"
@@ -241,16 +282,13 @@ def get_weekly_stats(player_id: int, days: int = 7) -> Optional[dict]:
 def get_cumulative_trend(player_id: int) -> list[dict]:
     """
     Builds season-to-date cumulative stats at each game date.
-    Powers the trend charts on the dashboard.
-    Returns list of {date, ops, hr, rbi, avg, games} dicts.
+    Powers the OPS/HR/AVG/RBI trend charts on the dashboard.
     """
     game_log = get_game_log(player_id)
     if not game_log:
         return []
 
-    # Reverse to go oldest → newest
     games = list(reversed(game_log))
-
     cum_ab = cum_hits = cum_doubles = cum_triples = cum_hr = cum_rbi = 0
     cum_bb = cum_tb = cum_runs = 0
     trend = []
@@ -265,11 +303,10 @@ def get_cumulative_trend(player_id: int) -> list[dict]:
         cum_bb += game.get("bb", 0)
         cum_runs += game.get("runs", 0)
 
-        # Total bases
         singles = cum_hits - cum_doubles - cum_triples - cum_hr
         cum_tb = singles + (2 * cum_doubles) + (3 * cum_triples) + (4 * cum_hr)
 
-        pa = cum_ab + cum_bb  # simplified PA
+        pa = cum_ab + cum_bb
         obp = (cum_hits + cum_bb) / pa if pa > 0 else 0
         slg = cum_tb / cum_ab if cum_ab > 0 else 0
         avg = cum_hits / cum_ab if cum_ab > 0 else 0
@@ -315,7 +352,6 @@ def _parse_hitting_stats(raw: dict) -> dict:
         "ops": raw.get("ops", ".000"),
         "babip": raw.get("babip", ".000"),
         "tb": raw.get("totalBases", 0),
-        # WAR and wRC+ come from FanGraphs, not here
         "war": None,
         "wrc_plus": None,
         "fwar": None,
@@ -334,11 +370,14 @@ def _empty_stats() -> dict:
 
 
 def _parse_game(game: dict, team_id: int, game_date: str) -> Optional[dict]:
-    """Parse a single game from the schedule API into our format."""
+    """Parse a single game from the schedule API into our format.
+
+    NEW: Now captures opposing_pitcher_id alongside fullName so the
+    schedule endpoint can look up career batter vs. pitcher stats.
+    """
     away_team = game.get("teams", {}).get("away", {})
     home_team = game.get("teams", {}).get("home", {})
 
-    # Figure out which side our team is on
     our_side = "home" if home_team.get("team", {}).get("id") == team_id else "away"
     opp_side = "away" if our_side == "home" else "home"
 
@@ -347,18 +386,17 @@ def _parse_game(game: dict, team_id: int, game_date: str) -> Optional[dict]:
 
     opponent_name = opp_data.get("team", {}).get("teamName", opp_data.get("team", {}).get("name", "TBD"))
 
-    # Probable pitcher for the opposing team (most relevant for the hitter)
-    opp_pitcher = opp_data.get("probablePitcher", {}).get("fullName", "TBD")
+    # NEW: capture both the pitcher's name AND id for the career lookup
+    probable_pitcher = opp_data.get("probablePitcher", {})
+    opp_pitcher = probable_pitcher.get("fullName", "TBD")
+    opp_pitcher_id = probable_pitcher.get("id")  # None if no starter announced yet
 
-    # Parse game time from ISO string
+    # Parse game time (UTC → approximate ET)
     game_time = "TBD"
     raw_time = game.get("gameDate", "")
     if raw_time:
         try:
             dt = datetime.strptime(raw_time, "%Y-%m-%dT%H:%M:%SZ")
-            # Convert UTC to ET (rough: -4 or -5 hours)
-            # For simplicity we display ET without DST awareness
-            from datetime import timezone
             et_hour = (dt.hour - 4) % 24
             am_pm = "AM" if et_hour < 12 else "PM"
             display_hour = et_hour if et_hour <= 12 else et_hour - 12
@@ -368,22 +406,13 @@ def _parse_game(game: dict, team_id: int, game_date: str) -> Optional[dict]:
         except ValueError:
             pass
 
-    # Result for completed games
-    linescore = game.get("linescore", {})
-    our_score = our_data.get("score")
-    opp_score = opp_data.get("score")
-    result = None
-    if our_score is not None and opp_score is not None:
-        win = our_score > opp_score
-        result = f"{'W' if win else 'L'} {our_score}-{opp_score}"
-
     return {
         "date": game_date,
         "time": game_time,
         "home_away": "vs" if our_side == "home" else "@",
         "opponent": opponent_name,
         "opposing_pitcher": opp_pitcher,
+        "opposing_pitcher_id": opp_pitcher_id,   # NEW: needed for career vs. lookup
         "status": game.get("status", {}).get("detailedState", "Scheduled"),
-        "result": result,
         "game_pk": game.get("gamePk"),
     }

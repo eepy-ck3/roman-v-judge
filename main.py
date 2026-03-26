@@ -4,12 +4,13 @@ main.py — FastAPI backend for the Roman vs Judge Bet Tracker
 Routes:
   GET  /                     → serves the dashboard HTML
   GET  /api/comparison        → full head-to-head data (main dashboard payload)
-  GET  /api/schedule/{team}   → upcoming games + recent results
+  GET  /api/schedule/{team}   → upcoming games with career vs. pitcher stats
   GET  /api/odds              → MVP odds
   GET  /api/trends/{player}   → season trend data for charts
-  GET  /api/gamelog/{player}  → last N games detail
-  POST /api/odds/manual       → update manual odds
-  POST /api/trigger-report    → manually trigger weekly report (for testing)
+  GET  /api/gamelog/{player}  → last N games detail (powers "Last 5 Games" panel)
+  POST /api/odds/refresh      → bust odds cache and re-fetch
+  GET  /api/odds/debug        → inspect raw Odds API response
+  POST /api/trigger-report    → manually trigger weekly report
   GET  /api/cache-stats       → debugging endpoint
   POST /api/cache/clear       → nuke the cache
 
@@ -21,8 +22,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse
 
 import config
 import mlb_api
@@ -42,7 +42,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start the scheduler on boot, stop it on shutdown."""
     from scheduler import start_scheduler, stop_scheduler
     start_scheduler()
     logger.info("🚀 Roman vs Judge Bet Tracker is live!")
@@ -57,15 +56,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Serve static files (CSS, JS) from the /static directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# ─── Dashboard Route ──────────────────────────────────────────────────────────
+# ─── Dashboard ────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=FileResponse)
 async def dashboard():
-    """Serve the dashboard HTML."""
     return FileResponse("static/index.html")
 
 
@@ -74,15 +71,12 @@ async def dashboard():
 @app.get("/api/comparison")
 async def get_comparison():
     """
-    The main API endpoint — returns everything the dashboard needs.
-    Aggregates: player info, season stats, advanced stats, schedule, odds, bet score.
-    Cached at the individual data layer (mlb_api, fangraphs_api, etc.)
+    Main dashboard payload — player info, season stats, advanced stats, odds, bet score.
+    recent_games here powers the separate "Last 5 Games" panel (not the schedule panel).
     """
     roman_id = config.ROMAN_PLAYER_ID
     judge_id = config.JUDGE_PLAYER_ID
 
-    # Fetch all data in parallel-ish (Python isn't truly async here but it's fast
-    # due to caching after the first request)
     roman_info = mlb_api.get_player_info(roman_id) or {}
     judge_info = mlb_api.get_player_info(judge_id) or {}
     roman_season = mlb_api.get_season_stats(roman_id) or {}
@@ -90,7 +84,6 @@ async def get_comparison():
     fg_stats = fangraphs_api.get_both_advanced_stats()
     current_odds = odds_module.get_mvp_odds()
 
-    # Merge FanGraphs data into season stats
     if fg_stats.get("roman"):
         roman_season.update({
             "fwar": fg_stats["roman"].get("war"),
@@ -114,10 +107,9 @@ async def get_comparison():
             "def_runs": fg_stats["judge"].get("def_runs"),
         })
 
-    # Calculate bet score
     bet_score = scoring.calculate_bet_score(judge_season, roman_season)
 
-    # Recent game logs (last 5 games for display)
+    # Powers the "Last 5 Games" panel — separate from the schedule panel
     roman_gamelog = mlb_api.get_game_log(roman_id)[:5]
     judge_gamelog = mlb_api.get_game_log(judge_id)[:5]
 
@@ -147,39 +139,54 @@ async def get_comparison():
 @app.get("/api/schedule/{team_key}")
 async def get_schedule(team_key: str):
     """
-    Get upcoming + recent schedule for a team.
-    team_key: 'roman' or 'judge'
+    Upcoming games for a team, enriched with career batter vs. pitcher stats.
+
+    NEW: For each upcoming game with an announced starter, fetches the batter's
+    career stats against that specific pitcher via the MLB vsPlayer endpoint.
+    Cached at the same TTL as schedule data (1 hour).
+
+    EDIT 2: 'recent' results removed — schedule now shows upcoming games only.
+    Recent game stats live in /api/gamelog/{player} (powers the Last 5 Games panel).
     """
     if team_key == "roman":
         team_id = config.ROMAN_TEAM_ID
+        player_id = config.ROMAN_PLAYER_ID
         player_name = config.ROMAN_DISPLAY_NAME
     elif team_key == "judge":
         team_id = config.JUDGE_TEAM_ID
+        player_id = config.JUDGE_PLAYER_ID
         player_name = config.JUDGE_DISPLAY_NAME
     else:
         raise HTTPException(status_code=400, detail="team_key must be 'roman' or 'judge'")
 
     schedule = mlb_api.get_schedule(team_id)
+
+    # NEW: Career vs. Pitcher stats — enrich each upcoming game server-side.
+    # Skips games where no starter has been announced (opposing_pitcher_id is None).
+    # Roman Anthony will return None for most pitchers as a 2025 rookie — expected.
+    for game in schedule["upcoming"]:
+        pitcher_id = game.get("opposing_pitcher_id")
+        if pitcher_id:
+            game["career_vs_pitcher"] = mlb_api.get_career_vs_pitcher(player_id, pitcher_id)
+        else:
+            game["career_vs_pitcher"] = None
+
     return {
         "player": player_name,
         "team_id": team_id,
-        **schedule
+        **schedule,
     }
 
 
 @app.get("/api/odds")
 async def get_odds():
-    """Current MVP odds for both players."""
+    """Current AL MVP odds for both players."""
     return odds_module.get_mvp_odds()
 
 
 @app.get("/api/trends/{player_key}")
 async def get_trends(player_key: str):
-    """
-    Season trend data for charts.
-    Returns cumulative OPS, HR, RBI by game date.
-    player_key: 'roman' or 'judge'
-    """
+    """Season-to-date cumulative stats for trend charts."""
     if player_key == "roman":
         player_id = config.ROMAN_PLAYER_ID
     elif player_key == "judge":
@@ -187,19 +194,14 @@ async def get_trends(player_key: str):
     else:
         raise HTTPException(status_code=400, detail="player_key must be 'roman' or 'judge'")
 
-    trend_data = mlb_api.get_cumulative_trend(player_id)
-    return {
-        "player": player_key,
-        "data": trend_data,
-    }
+    return {"player": player_key, "data": mlb_api.get_cumulative_trend(player_id)}
 
 
 @app.get("/api/gamelog/{player_key}")
 async def get_gamelog(player_key: str, limit: int = 10):
     """
-    Detailed game-by-game log.
-    player_key: 'roman' or 'judge'
-    limit: number of games to return (default 10)
+    Game-by-game log. Powers the "Last 5 Games" panel on the dashboard
+    and is used by the weekly report for per-game stats.
     """
     if player_key == "roman":
         player_id = config.ROMAN_PLAYER_ID
@@ -208,61 +210,45 @@ async def get_gamelog(player_key: str, limit: int = 10):
     else:
         raise HTTPException(status_code=400, detail="player_key must be 'roman' or 'judge'")
 
-    game_log = mlb_api.get_game_log(player_id)
-    return {
-        "player": player_key,
-        "games": game_log[:limit],
-    }
+    return {"player": player_key, "games": mlb_api.get_game_log(player_id)[:limit]}
 
 
 # ─── Odds Endpoints ───────────────────────────────────────────────────────────
 
 @app.post("/api/odds/refresh")
 async def refresh_odds():
-    """Force a fresh fetch from The Odds API by busting the cache."""
+    """Bust the odds cache and fetch fresh data from The Odds API."""
     cache_module.invalidate("get_mvp_odds")
-    fresh = odds_module.get_mvp_odds()
-    return fresh
+    return odds_module.get_mvp_odds()
 
 
 @app.get("/api/odds/debug")
 async def debug_odds():
-    """
-    Shows raw data from The Odds API — use this to see which markets are active
-    and confirm the MVP futures market is available. Does not use cache.
-    """
+    """Raw Odds API response — use to confirm which MLB markets are active."""
     return odds_module.debug_raw()
 
 
+# ─── Admin / Debug ────────────────────────────────────────────────────────────
+
 @app.post("/api/trigger-report")
 async def trigger_report(background_tasks: BackgroundTasks):
-    """
-    Manually trigger the weekly report. Great for testing your email/SMS setup.
-    Runs in the background so the request returns immediately.
-    """
+    """Manually send the weekly report. Useful for testing email/SMS setup."""
     from scheduler import trigger_report_now
     background_tasks.add_task(trigger_report_now)
     return {"message": "Weekly report triggered! Check your email and phone in a moment."}
 
 
-# ─── Debug Endpoints ──────────────────────────────────────────────────────────
-
 @app.get("/api/cache-stats")
 async def get_cache_stats():
-    """See what's cached and how old it is."""
     return cache_module.stats()
 
 
 @app.post("/api/cache/clear")
 async def clear_cache():
-    """Nuke the cache — forces fresh data on next request."""
     cache_module.invalidate()
-    return {"message": "Cache cleared. Next requests will hit the APIs fresh."}
+    return {"message": "Cache cleared."}
 
-
-# ─── Health Check ─────────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
-    """Render.com and load balancers ping this."""
     return {"status": "ok", "season": config.SEASON}

@@ -286,54 +286,58 @@ function renderPlayerGameLog(player, games) {
   `).join('');
 }
 
+// EDIT 2: renderSchedulePanel no longer renders a "Recent Results" sub-section.
+// That section was removed — recent game-by-game stats are in the "Last 5 Games" panel below.
 function renderSchedulePanel(el, data, player) {
   const upcoming = data.upcoming || [];
-  const recent = data.recent || [];
-  const isRoman = player === 'roman';
-  const color = isRoman ? 'roman' : 'judge';
 
-  el.innerHTML = `
-    <div class="schedule-section">
-      <div class="schedule-section-title">Upcoming Games</div>
-      ${upcoming.length ? upcoming.map(g => upcomingGameHTML(g)).join('') : '<div class="no-data">No upcoming games</div>'}
-    </div>
-    <div class="schedule-section">
-      <div class="schedule-section-title">Recent Results</div>
-      ${recent.length ? recent.map(g => recentGameHTML(g)).join('') : '<div class="no-data">No recent games</div>'}
-    </div>
-  `;
+  el.innerHTML = upcoming.length
+    ? upcoming.map(g => upcomingGameHTML(g)).join('')
+    : '<div class="no-data">No upcoming games scheduled</div>';
 }
 
+// NEW: Career vs. Pitcher stats — renders each upcoming game row with a career matchup sub-line.
 function upcomingGameHTML(g) {
+  const hasPitcher = g.opposing_pitcher && g.opposing_pitcher !== 'TBD';
+  const career = g.career_vs_pitcher;
+
+  // Build the career stats line (only shown when a starter is announced)
+  let careerHTML = '';
+  if (hasPitcher) {
+    if (career) {
+      // Career data exists — show AB, AVG, HR, K, OPS
+      careerHTML = `
+        <div class="career-vs">
+          <span class="career-vs-label">Career vs:</span>
+          ${career.ab} AB ·
+          ${career.avg} AVG ·
+          ${career.hr} HR ·
+          ${career.k} K ·
+          ${career.ops} OPS
+        </div>`;
+    } else {
+      // Pitcher announced but no career history (rookie batter, rookie pitcher, or never faced)
+      careerHTML = `<div class="career-vs career-vs-none">No career history vs. this pitcher</div>`;
+    }
+  }
+
   return `
-    <div class="game-row">
+    <div class="game-row game-row-upcoming">
       <div class="game-date">${formatDate(g.date)}</div>
       <div class="game-matchup">
-        <span class="game-ha">${g.home_away}</span>
-        <span class="game-opponent"> ${g.opponent}</span>
-        ${g.opposing_pitcher && g.opposing_pitcher !== 'TBD'
-          ? `<div class="game-pitcher">vs SP: ${g.opposing_pitcher}</div>`
-          : ''}
+        <div>
+          <span class="game-ha">${g.home_away}</span>
+          <span class="game-opponent"> ${g.opponent}</span>
+        </div>
+        ${hasPitcher ? `<div class="game-pitcher">SP: ${g.opposing_pitcher}</div>` : '<div class="game-pitcher text-muted">SP: TBD</div>'}
+        ${careerHTML}
       </div>
       <div class="game-time">${g.time}</div>
     </div>
   `;
 }
 
-function recentGameHTML(g) {
-  const isWin = g.result?.startsWith('W');
-  const isLoss = g.result?.startsWith('L');
-  return `
-    <div class="game-row">
-      <div class="game-date">${formatDate(g.date)}</div>
-      <div class="game-matchup">
-        <span class="game-ha">${g.home_away}</span>
-        <span class="game-opponent"> ${g.opponent}</span>
-      </div>
-      <div class="game-result ${isWin ? 'win' : isLoss ? 'loss' : ''}">${g.result || '—'}</div>
-    </div>
-  `;
-}
+// recentGameHTML removed — EDIT 2: recent results section dropped from schedule panel.
 
 function renderOddsPanel(odds) {
   if (!odds) return;
