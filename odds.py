@@ -185,6 +185,12 @@ def debug_raw() -> dict:
     """
     Returns raw data from The Odds API for debugging.
     Accessible via GET /api/odds/debug — does NOT use cache.
+
+    Now returns three buckets:
+    - mlb_related: anything with 'mlb' or 'baseball' in the key/title
+    - award_related: anything with 'award', 'mvp', 'winner', 'cy young' anywhere
+                     across ALL 158 sports — catches markets listed outside baseball
+    - has_outrights: any active market with has_outrights=true (futures of any kind)
     """
     if not ODDS_API_KEY:
         return {"error": "ODDS_API_KEY not configured"}
@@ -199,14 +205,38 @@ def debug_raw() -> dict:
         all_sports = resp.json()
         remaining = resp.headers.get("x-requests-remaining", "?")
 
-        # Filter to just MLB/baseball related ones for readability
-        mlb_sports = [s for s in all_sports if "mlb" in s.get("key","").lower() or "baseball" in s.get("key","").lower()]
+        award_keywords = {"award", "mvp", "cy young", "winner", "hank aaron", "rookie"}
+        mlb_keywords = {"mlb", "baseball"}
+
+        mlb_related = []
+        award_related = []
+        has_outrights = []
+
+        for s in all_sports:
+            key = s.get("key", "").lower()
+            title = s.get("title", "").lower()
+            combined = key + " " + title
+
+            if any(k in combined for k in mlb_keywords):
+                mlb_related.append(s)
+
+            if any(k in combined for k in award_keywords):
+                award_related.append(s)
+
+            if s.get("active") and s.get("has_outrights"):
+                has_outrights.append({"key": s["key"], "title": s.get("title", "")})
 
         return {
             "requests_remaining": remaining,
             "total_sports_available": len(all_sports),
-            "mlb_related_markets": mlb_sports,
-            "note": "Look for award/MVP markets in mlb_related_markets. If empty, the market isn't open yet."
+            "mlb_related": mlb_related,
+            "award_related_anywhere": award_related,
+            "all_active_outrights": has_outrights,
+            "note": (
+                "award_related_anywhere searches ALL 158 sports for mvp/award keywords. "
+                "all_active_outrights shows every futures market currently open — "
+                "scan these for anything baseball/MVP related."
+            )
         }
     except Exception as e:
         return {"error": str(e)}
