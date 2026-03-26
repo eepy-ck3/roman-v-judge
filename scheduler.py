@@ -109,6 +109,13 @@ def weekly_report_job():
         week_winner = _determine_leader(week_score["judge"], week_score["roman"])
 
         trash_talk = generate_trash_talk(season_leader)
+
+        # Build the week_of string for the prior Mon-Sun
+        today = date.today()
+        last_monday = today - timedelta(days=today.weekday() + 7)
+        last_sunday = last_monday + timedelta(days=6)
+        week_of = f"{last_monday.strftime('%b %d')} – {last_sunday.strftime('%b %d')}"
+
         passan_summary = generate_passan_summary({
             "roman_week": roman_week,
             "judge_week": judge_week,
@@ -119,12 +126,6 @@ def weekly_report_job():
             "week_winner": week_winner,
             "season_leader": season_leader,
         })
-
-        # Build the week_of string for the prior Mon-Sun
-        today = date.today()
-        last_monday = today - timedelta(days=today.weekday() + 7)
-        last_sunday = last_monday + timedelta(days=6)
-        week_of = f"{last_monday.strftime('%b %d')} – {last_sunday.strftime('%b %d')}"
 
         report_data = {
             "week_of": week_of,
