@@ -70,7 +70,7 @@ def weekly_report_job():
     from mlb_api import get_season_stats, get_weekly_stats, get_game_log
     from fangraphs_api import get_both_advanced_stats
     from odds import get_mvp_odds
-    from notifications import send_weekly_email, send_weekly_sms, generate_trash_talk
+    from notifications import send_weekly_email, send_weekly_sms, generate_trash_talk, generate_passan_summary
     from scoring import calculate_bet_score
 
     try:
@@ -109,6 +109,16 @@ def weekly_report_job():
         week_winner = _determine_leader(week_score["judge"], week_score["roman"])
 
         trash_talk = generate_trash_talk(season_leader)
+        passan_summary = generate_passan_summary({
+            "roman_week": roman_week,
+            "judge_week": judge_week,
+            "roman": {"season_stats": roman_season},
+            "judge": {"season_stats": judge_season},
+            "odds": current_odds,
+            "week_of": week_of,
+            "week_winner": week_winner,
+            "season_leader": season_leader,
+        })
 
         # Build the week_of string for the prior Mon-Sun
         today = date.today()
@@ -140,6 +150,7 @@ def weekly_report_job():
             "week_winner": week_winner,
             "season_leader": season_leader,
             "trash_talk": trash_talk,
+            "passan_summary": passan_summary,
             "your_name": config.YOUR_NAME,
             "brother_name": config.BROTHER_NAME,
         }

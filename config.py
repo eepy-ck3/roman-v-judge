@@ -59,6 +59,11 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")   # Gmail App Password
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Roman vs Judge Bet Tracker 🏆")
 
+# ─── Anthropic — Weekly Narrative ─────────────────────────────────────────────
+# Used to generate a Jeff Passan-style write-up in the Monday email.
+# Get a key at console.anthropic.com — the weekly call costs ~$0.05.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
 # ─── The Odds API — MVP Futures ───────────────────────────────────────────────
 # Free tier at the-odds-api.com — 500 requests/month is plenty with caching
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")

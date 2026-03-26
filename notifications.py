@@ -59,6 +59,92 @@ TRASH_TALK = {
 }
 
 
+def generate_passan_summary(report_data: dict) -> Optional[str]:
+    """
+    Generate a Jeff Passan-style narrative summary of the week using Claude.
+    Returns 2-3 paragraphs of prose, or None if the API key isn't configured
+    or the call fails.
+    """
+    if not config.ANTHROPIC_API_KEY:
+        logger.debug("ANTHROPIC_API_KEY not set — skipping Passan summary")
+        return None
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+
+        rw = report_data.get("roman_week") or {}
+        jw = report_data.get("judge_week") or {}
+        rs = (report_data.get("roman") or {}).get("season_stats") or {}
+        js = (report_data.get("judge") or {}).get("season_stats") or {}
+        odds = report_data.get("odds") or {}
+        week_of = report_data.get("week_of", "this week")
+        week_winner = report_data.get("week_winner", "tied")
+        season_leader = report_data.get("season_leader", "tied")
+
+        def _stat(d, key, default="N/A"):
+            v = d.get(key)
+            return str(v) if v is not None else default
+
+        stats_block = f"""
+WEEK OF: {week_of}
+
+ROMAN ANTHONY (BOS) — This Week:
+  AVG {_stat(rw,'avg','.---')} | OBP {_stat(rw,'obp','.---')} | SLG {_stat(rw,'slg','.---')} | OPS {_stat(rw,'ops','.---')}
+  HR {_stat(rw,'hr','0')} | RBI {_stat(rw,'rbi','0')} | R {_stat(rw,'runs','0')} | SB {_stat(rw,'sb','0')} | K {_stat(rw,'k','0')} | Games {_stat(rw,'games','0')}
+
+AARON JUDGE (NYY) — This Week:
+  AVG {_stat(jw,'avg','.---')} | OBP {_stat(jw,'obp','.---')} | SLG {_stat(jw,'slg','.---')} | OPS {_stat(jw,'ops','.---')}
+  HR {_stat(jw,'hr','0')} | RBI {_stat(jw,'rbi','0')} | R {_stat(jw,'runs','0')} | SB {_stat(jw,'sb','0')} | K {_stat(jw,'k','0')} | Games {_stat(jw,'games','0')}
+
+SEASON TOTALS:
+  Roman — AVG {_stat(rs,'avg','.---')} | HR {_stat(rs,'hr','0')} | RBI {_stat(rs,'rbi','0')} | OPS {_stat(rs,'ops','.---')} | fWAR {_stat(rs,'fwar','N/A')} | wRC+ {_stat(rs,'wrc_plus','N/A')}
+  Judge — AVG {_stat(js,'avg','.---')} | HR {_stat(js,'hr','0')} | RBI {_stat(js,'rbi','0')} | OPS {_stat(js,'ops','.---')} | fWAR {_stat(js,'fwar','N/A')} | wRC+ {_stat(js,'wrc_plus','N/A')}
+
+AL MVP ODDS (FanDuel):
+  Judge: {(odds.get('judge') or {}).get('odds','N/A')} ({(odds.get('judge') or {}).get('implied_prob','?')}% implied)
+  Roman: {(odds.get('roman') or {}).get('odds','N/A')} ({(odds.get('roman') or {}).get('implied_prob','?')}% implied)
+
+WEEK WINNER: {week_winner.upper()}
+SEASON LEADER: {season_leader.upper()}
+
+CONTEXT: This is a season-long bet between two friends — one rooting for Roman Anthony (Red Sox rookie OF) to win AL MVP, the other backing Aaron Judge (Yankees RF, reigning AL MVP). The bet started before the 2025 season.
+""".strip()
+
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=600,
+            system=(
+                "You are Jeff Passan, ESPN's lead baseball writer. "
+                "Write in his signature style: cinematic, dramatic, historically aware, "
+                "deeply reverent of the game. Use vivid prose. Give weight to statistics — "
+                "don't just recite them, make the reader feel what they mean. "
+                "You may reference baseball history, the pressures of the sport, what's at stake. "
+                "Keep it punchy. Two short paragraphs max. No bullet points. No headers. "
+                "Plain text only — no markdown, no asterisks, no HTML."
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Write a two-paragraph recap of this week's Roman Anthony vs. Aaron Judge matchup "
+                    f"for a weekly bet tracker email. Make it feel like a real Passan column — "
+                    f"not a summary, a story. Here are the numbers:\n\n{stats_block}"
+                )
+            }]
+        )
+
+        text = next(
+            (b.text for b in response.content if b.type == "text"), None
+        )
+        if text:
+            logger.info("Passan summary generated successfully")
+        return text
+
+    except Exception as e:
+        logger.warning(f"Passan summary generation failed: {e}")
+        return None
+
+
 def generate_trash_talk(winner: str) -> str:
     """Pick a random trash-talk line for the weekly winner."""
     lines = TRASH_TALK.get(winner, TRASH_TALK["tied"])

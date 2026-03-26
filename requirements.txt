@@ -26,5 +26,8 @@ pydantic==2.9.2            # FastAPI depends on this; used for request models
 # ── Static Files ───────────────────────────────────────────────────────────────
 aiofiles==24.1.0           # FastAPI static file serving
 
+# ── AI Narrative (weekly email summary) ────────────────────────────────────────
+anthropic>=0.40.0          # Claude API — Jeff Passan-style weekly recap
+
 # ── Optional but nice ──────────────────────────────────────────────────────────
 # python-multipart==0.0.12  # Uncomment if you add file upload endpoints

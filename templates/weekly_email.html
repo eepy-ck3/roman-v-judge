@@ -147,6 +147,21 @@
           </td>
         </tr>
 
+        <!-- ── Passan Narrative ────────────────────────────────────────────── -->
+        {% if passan_summary %}
+        <tr>
+          <td style="background:#161616;border:1px solid #2a2a2a;border-top:1px solid #2a2a2a;border-bottom:none;padding:24px 32px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#555;margin-bottom:16px;border-bottom:1px solid #2a2a2a;padding-bottom:10px">
+              ✍️ The Week in Baseball
+            </div>
+            <div style="font-size:15px;color:#d0d0d0;line-height:1.75;font-style:italic">
+              {{ passan_summary | replace('\n\n', '</p><p style="margin:0 0 12px 0;font-size:15px;color:#d0d0d0;line-height:1.75;font-style:italic">') | replace('\n', ' ') }}
+            </div>
+            <div style="margin-top:14px;font-size:10px;color:#444;text-align:right">— Written by Claude (in the style of Jeff Passan)</div>
+          </td>
+        </tr>
+        {% endif %}
+
         <!-- ── Season Totals ───────────────────────────────────────────────── -->
         <tr>
           <td style="background:#161616;border:1px solid #2a2a2a;border-top:1px solid #2a2a2a;border-bottom:none;padding:24px 32px">
