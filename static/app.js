@@ -341,24 +341,31 @@ function renderOddsPanel(odds) {
   const judgeOdds = odds.judge || {};
   const romanOdds = odds.roman || {};
 
-  // Odds cards
   const judgeEl = document.getElementById('odds-judge');
   const romanEl = document.getElementById('odds-roman');
 
   if (judgeEl) {
     judgeEl.querySelector('.odds-value').textContent = judgeOdds.odds || 'N/A';
     judgeEl.querySelector('.odds-prob').textContent =
-      judgeOdds.implied_prob ? `${judgeOdds.implied_prob}% implied` : '';
+      judgeOdds.implied_prob != null ? `${judgeOdds.implied_prob}% implied` : '';
     const srcEl = judgeEl.querySelector('.odds-source');
-    if (srcEl) srcEl.textContent = judgeOdds.source === 'manual' ? '(manual entry)' : '(live odds)';
+    if (srcEl) srcEl.textContent = judgeOdds.source === 'odds_api' ? '(live)' : '';
   }
 
   if (romanEl) {
     romanEl.querySelector('.odds-value').textContent = romanOdds.odds || 'N/A';
     romanEl.querySelector('.odds-prob').textContent =
-      romanOdds.implied_prob ? `${romanOdds.implied_prob}% implied` : '';
+      romanOdds.implied_prob != null ? `${romanOdds.implied_prob}% implied` : '';
     const srcEl = romanEl.querySelector('.odds-source');
-    if (srcEl) srcEl.textContent = romanOdds.source === 'manual' ? '(manual entry)' : '(live odds)';
+    if (srcEl) srcEl.textContent = romanOdds.source === 'odds_api' ? '(live)' : '';
+  }
+
+  // Market status message
+  const statusEl = document.getElementById('odds-market-status');
+  if (statusEl && odds.market_status && odds.market_status !== 'active') {
+    statusEl.textContent = `ℹ️ Futures market not open yet: "${odds.market_status}"`;
+  } else if (statusEl) {
+    statusEl.textContent = '';
   }
 
   // Leaderboard
@@ -380,7 +387,10 @@ function renderOddsPanel(odds) {
       `;
     }).join('');
   } else if (lbEl) {
-    lbEl.innerHTML = '<div class="no-data text-xs">Leaderboard unavailable — odds API returned manual fallback only</div>';
+    const reason = odds.market_status && odds.market_status !== 'active'
+      ? `Futures market not open yet (${odds.market_status})`
+      : 'No leaderboard data available';
+    lbEl.innerHTML = `<div class="no-data text-xs">${reason}</div>`;
   }
 }
 
@@ -495,31 +505,6 @@ async function refreshOdds(btn) {
   } finally {
     btn.textContent = original;
     btn.disabled = false;
-  }
-}
-
-async function updateOddsManually() {
-  const judgeOdds = document.getElementById('manual-judge-odds')?.value?.trim();
-  const romanOdds = document.getElementById('manual-roman-odds')?.value?.trim();
-
-  if (!judgeOdds || !romanOdds) {
-    showToast('Enter odds for both players (e.g. +200 or -150)', 'error');
-    return;
-  }
-
-  try {
-    await fetch('/api/odds/manual', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ judge_odds: judgeOdds, roman_odds: romanOdds }),
-    });
-
-    // Refresh the odds display
-    const odds = await fetchJSON('/api/odds');
-    renderOddsPanel(odds);
-    showToast('Odds updated!', 'success');
-  } catch (e) {
-    showToast('Failed to update odds', 'error');
   }
 }
 

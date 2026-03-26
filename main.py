@@ -215,12 +215,7 @@ async def get_gamelog(player_key: str, limit: int = 10):
     }
 
 
-# ─── Manual Update Endpoints ──────────────────────────────────────────────────
-
-class ManualOddsUpdate(BaseModel):
-    judge_odds: str   # American format: "+200" or "-150"
-    roman_odds: str
-
+# ─── Odds Endpoints ───────────────────────────────────────────────────────────
 
 @app.post("/api/odds/refresh")
 async def refresh_odds():
@@ -230,18 +225,13 @@ async def refresh_odds():
     return fresh
 
 
-@app.post("/api/odds/manual")
-async def update_odds_manually(update: ManualOddsUpdate):
+@app.get("/api/odds/debug")
+async def debug_odds():
     """
-    Manually update MVP odds when the API doesn't have them.
-    Check any sportsbook (DraftKings, FanDuel) and paste the odds here.
+    Shows raw data from The Odds API — use this to see which markets are active
+    and confirm the MVP futures market is available. Does not use cache.
     """
-    odds_module.update_manual_odds(update.judge_odds, update.roman_odds)
-    return {
-        "message": "Odds updated!",
-        "judge_odds": update.judge_odds,
-        "roman_odds": update.roman_odds,
-    }
+    return odds_module.debug_raw()
 
 
 @app.post("/api/trigger-report")

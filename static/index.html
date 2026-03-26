@@ -152,22 +152,7 @@
             </div>
           </div>
 
-          <!-- Manual odds update form -->
-          <hr class="divider">
-          <div class="text-xs text-muted mb-4">
-            📝 Odds API doesn't always have futures. Update manually from any sportsbook:
-          </div>
-          <div class="manual-update-form">
-            <div class="form-group">
-              <label class="form-label">Judge Odds</label>
-              <input class="form-input" id="manual-judge-odds" placeholder="+200" maxlength="8">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Roman Odds</label>
-              <input class="form-input" id="manual-roman-odds" placeholder="+2500" maxlength="8">
-            </div>
-            <button class="btn btn-primary" onclick="updateOddsManually()">Update</button>
-          </div>
+          <div class="text-xs text-muted" id="odds-market-status" style="margin-top:12px;text-align:center"></div>
         </div>
       </div>
 
