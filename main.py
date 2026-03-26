@@ -228,6 +228,16 @@ async def debug_odds():
     return odds_module.debug_raw()
 
 
+@app.get("/api/odds/debug-an")
+async def debug_action_network():
+    """
+    Probes all Action Network candidate endpoints and returns raw status + response shape.
+    Use this to find which endpoint has AL MVP odds (if any).
+    """
+    import actionnetwork
+    return actionnetwork.debug_raw()
+
+
 # ─── Admin / Debug ────────────────────────────────────────────────────────────
 
 @app.post("/api/trigger-report")

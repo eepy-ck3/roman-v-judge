@@ -35,11 +35,31 @@ MVP_KEYWORDS = {"mvp", "award", "most valuable"}
 def get_mvp_odds() -> dict:
     """
     Fetch AL MVP odds for both players.
-    Returns structured odds dict — shows N/A cleanly if market isn't available.
+    Chain: The Odds API → Action Network → N/A
+
+    The Odds API confirmed no MLB award markets exist (World Series only).
+    Action Network aggregates FanDuel/DraftKings/BetMGM odds and may have MVP futures.
     """
-    if not ODDS_API_KEY:
-        logger.warning("ODDS_API_KEY not set")
-        return _empty_response("No API key configured")
+    # Try The Odds API first (in case they ever add the market)
+    if ODDS_API_KEY:
+        award_sports = _find_award_sport_keys()
+        if award_sports:
+            all_outcomes = {}
+            for sport in award_sports:
+                for name, prices in _fetch_outright_odds(sport["key"]).items():
+                    all_outcomes.setdefault(name, []).extend(prices)
+            if all_outcomes:
+                return _build_response_from_outcomes(all_outcomes, "odds_api")
+
+    # Try Action Network
+    import actionnetwork
+    an_result = actionnetwork.get_al_mvp_odds()
+    if an_result:
+        logger.info("Using Action Network for MVP odds")
+        return an_result
+
+    logger.info("No MVP odds available from any source")
+    return _empty_response("No active futures market found")
 
     # Step 1: discover which award markets are currently active
     award_sports = _find_award_sport_keys()
@@ -240,6 +260,40 @@ def debug_raw() -> dict:
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+def _build_response_from_outcomes(all_outcomes: dict, source: str) -> dict:
+    """Shared response builder — used by The Odds API path (and extensible to others)."""
+    judge_prices, roman_prices = [], []
+    for name, prices in all_outcomes.items():
+        name_lower = name.lower()
+        if any(v in name_lower for v in JUDGE_NAME_VARIANTS):
+            judge_prices.extend(prices)
+        if any(v in name_lower for v in ROMAN_NAME_VARIANTS):
+            roman_prices.extend(prices)
+
+    leaderboard = []
+    for name, prices in all_outcomes.items():
+        avg = int(sum(prices) / len(prices))
+        leaderboard.append({
+            "name": name,
+            "odds": _fmt(avg),
+            "implied_prob": round(_implied(avg), 1),
+        })
+    leaderboard.sort(key=lambda x: x["implied_prob"], reverse=True)
+
+    def _entry(prices):
+        if not prices:
+            return {"odds": "N/A", "implied_prob": None, "source": source}
+        avg = int(sum(prices) / len(prices))
+        return {"odds": _fmt(avg), "implied_prob": round(_implied(avg), 1), "source": source}
+
+    return {
+        "judge": _entry(judge_prices),
+        "roman": _entry(roman_prices),
+        "leaderboard": leaderboard[:10],
+        "market_status": "active",
+    }
 
 
 def _empty_response(reason: str) -> dict:
