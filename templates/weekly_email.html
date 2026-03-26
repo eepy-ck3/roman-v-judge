@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roman vs Judge — Week of {{ week_of }}</title>
+  <!--
+    Weekly email template — rendered via Jinja2 in notifications.py
+    Keep styles inline — email clients strip <style> blocks.
+    Tested on Gmail, Apple Mail, Outlook (desktop).
+  -->
+</head>
+<body style="margin:0;padding:0;background:#0d0d0d;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0d0d0d;min-height:100vh">
+  <tr>
+    <td align="center" style="padding:32px 16px">
+
+      <!-- Main container -->
+      <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%">
+
+        <!-- ── Header ──────────────────────────────────────────────────────── -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#1a0a0a,#0a0a1a);border-radius:16px 16px 0 0;padding:32px 32px 24px;text-align:center;border:1px solid #2a2a2a;border-bottom:none">
+            <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#666;margin-bottom:12px">
+              ⚾ Season {{ season }} · Week of {{ week_of }}
+            </div>
+            <h1 style="margin:0;font-size:28px;font-weight:900;letter-spacing:-0.02em;color:#f0f0f0">
+              Roman vs. Judge
+            </h1>
+            <div style="font-size:14px;color:#666;margin-top:8px">Your weekly bet update has arrived</div>
+          </td>
+        </tr>
+
+        <!-- ── Bet Score ───────────────────────────────────────────────────── -->
+        {% set r_score = score.roman | default(50) %}
+        {% set j_score = score.judge | default(50) %}
+        {% set leader = score.leader | default('tied') %}
+
+        <tr>
+          <td style="background:#161616;border:1px solid #2a2a2a;border-top:none;border-bottom:none;padding:24px 32px">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <!-- Roman score -->
+                <td width="35%" style="text-align:left">
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#BD3039;margin-bottom:4px">Roman Anthony</div>
+                  <div style="font-size:48px;font-weight:900;color:#BD3039;line-height:1">{{ r_score }}</div>
+                  <div style="font-size:10px;color:#555;margin-top:2px">BOS · OF</div>
+                </td>
+
+                <!-- VS + bar -->
+                <td width="30%" style="text-align:center;vertical-align:middle">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#444;margin-bottom:10px">Bet Score</div>
+
+                  <!-- Score bar (approximated with table since CSS gradients are iffy in email) -->
+                  <table width="100%" cellpadding="0" cellspacing="0" style="height:8px;border-radius:4px;overflow:hidden;background:#222">
+                    <tr>
+                      <td width="{{ r_score }}%" style="background:#BD3039;height:8px"></td>
+                      <td width="{{ j_score }}%" style="background:#003087;height:8px"></td>
+                    </tr>
+                  </table>
+
+                  <div style="margin-top:12px">
+                    {% if leader == 'roman' %}
+                    <span style="background:rgba(189,48,57,0.2);color:#BD3039;padding:4px 12px;border-radius:100px;font-size:11px;font-weight:700;border:1px solid rgba(189,48,57,0.5)">🔴 Roman Leads</span>
+                    {% elif leader == 'judge' %}
+                    <span style="background:rgba(0,48,135,0.2);color:#4b74cc;padding:4px 12px;border-radius:100px;font-size:11px;font-weight:700;border:1px solid rgba(0,48,135,0.5)">⚫ Judge Leads</span>
+                    {% else %}
+                    <span style="background:rgba(245,158,11,0.15);color:#f59e0b;padding:4px 12px;border-radius:100px;font-size:11px;font-weight:700;border:1px solid rgba(245,158,11,0.4)">🤝 Dead Heat</span>
+                    {% endif %}
+                  </div>
+                </td>
+
+                <!-- Judge score -->
+                <td width="35%" style="text-align:right">
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#4b74cc;margin-bottom:4px">Aaron Judge</div>
+                  <div style="font-size:48px;font-weight:900;color:#4b74cc;line-height:1">{{ j_score }}</div>
+                  <div style="font-size:10px;color:#555;margin-top:2px">NYY · RF</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── This Week's Stats ───────────────────────────────────────────── -->
+        <tr>
+          <td style="background:#161616;border:1px solid #2a2a2a;border-top:1px solid #2a2a2a;border-bottom:none;padding:24px 32px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#555;margin-bottom:16px;border-bottom:1px solid #2a2a2a;padding-bottom:10px">
+              📅 This Week's Stats ({{ week_of }})
+            </div>
+
+            {% set rw = roman_week | default({}) %}
+            {% set jw = judge_week | default({}) %}
+
+            {% set week_winner = week_winner | default('tied') %}
+
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+              <!-- Header -->
+              <tr>
+                <th style="padding:8px 0;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#BD3039;border-bottom:1px solid #222">Roman</th>
+                <th style="padding:8px 0;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#555;border-bottom:1px solid #222">STAT</th>
+                <th style="padding:8px 0;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#4b74cc;border-bottom:1px solid #222">Judge</th>
+              </tr>
+
+              {% set week_stats = [
+                ('AVG',  rw.avg  | default('.---'), jw.avg  | default('.---'), true),
+                ('OBP',  rw.obp  | default('.---'), jw.obp  | default('.---'), true),
+                ('SLG',  rw.slg  | default('.---'), jw.slg  | default('.---'), true),
+                ('OPS',  rw.ops  | default('.---'), jw.ops  | default('.---'), true),
+                ('HR',   rw.hr   | default(0),      jw.hr   | default(0),      true),
+                ('RBI',  rw.rbi  | default(0),      jw.rbi  | default(0),      true),
+                ('R',    rw.runs | default(0),      jw.runs | default(0),      true),
+                ('SB',   rw.sb   | default(0),      jw.sb   | default(0),      true),
+                ('BB',   rw.bb   | default(0),      jw.bb   | default(0),      true),
+                ('K',    rw.k    | default(0),      jw.k    | default(0),      false),
+                ('G',    rw.games| default(0),      jw.games| default(0),      true),
+              ] %}
+
+              {% for stat_label, r_val, j_val, higher_better in week_stats %}
+              {% set r_num = r_val | float %}
+              {% set j_num = j_val | float %}
+              {% set roman_wins = (r_num > j_num and higher_better) or (r_num < j_num and not higher_better) %}
+              {% set judge_wins = (j_num > r_num and higher_better) or (j_num < r_num and not higher_better) %}
+              <tr>
+                <td style="padding:8px 0;text-align:left;font-size:14px;color:{{ '#BD3039' if roman_wins else '#a0a0a0' }};font-weight:{{ '700' if roman_wins else '400' }};border-bottom:1px solid #1a1a1a">
+                  {{ r_val }}{{ ' ▲' if roman_wins else '' }}
+                </td>
+                <td style="padding:8px 0;text-align:center;font-size:11px;color:#555;border-bottom:1px solid #1a1a1a">{{ stat_label }}</td>
+                <td style="padding:8px 0;text-align:right;font-size:14px;color:{{ '#4b74cc' if judge_wins else '#a0a0a0' }};font-weight:{{ '700' if judge_wins else '400' }};border-bottom:1px solid #1a1a1a">
+                  {{ '▲ ' if judge_wins else '' }}{{ j_val }}
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+
+            <!-- Week winner callout -->
+            <div style="margin-top:16px;padding:12px 16px;background:#111;border-radius:8px;border:1px solid #2a2a2a;text-align:center">
+              <span style="font-size:12px;color:#666">Week winner: </span>
+              {% if week_winner == 'roman' %}
+              <span style="font-size:14px;font-weight:700;color:#BD3039">🔴 Roman Anthony</span>
+              {% elif week_winner == 'judge' %}
+              <span style="font-size:14px;font-weight:700;color:#4b74cc">⚫ Aaron Judge</span>
+              {% else %}
+              <span style="font-size:14px;font-weight:700;color:#f59e0b">🤝 Tied</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+
+        <!-- ── Season Totals ───────────────────────────────────────────────── -->
+        <tr>
+          <td style="background:#161616;border:1px solid #2a2a2a;border-top:1px solid #2a2a2a;border-bottom:none;padding:24px 32px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#555;margin-bottom:16px;border-bottom:1px solid #2a2a2a;padding-bottom:10px">
+              📊 Season Totals
+            </div>
+
+            {% set rs = roman.season_stats | default({}) %}
+            {% set js = judge.season_stats | default({}) %}
+
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+              <tr>
+                <th style="padding:8px 0;text-align:left;font-size:10px;font-weight:700;color:#BD3039;border-bottom:1px solid #222">Roman</th>
+                <th style="padding:8px 0;text-align:center;font-size:10px;font-weight:700;color:#555;border-bottom:1px solid #222">STAT</th>
+                <th style="padding:8px 0;text-align:right;font-size:10px;font-weight:700;color:#4b74cc;border-bottom:1px solid #222">Judge</th>
+              </tr>
+
+              {% set season_stats = [
+                ('AVG',   rs.avg      | default('.---'), js.avg      | default('.---'), true),
+                ('OBP',   rs.obp      | default('.---'), js.obp      | default('.---'), true),
+                ('SLG',   rs.slg      | default('.---'), js.slg      | default('.---'), true),
+                ('OPS',   rs.ops      | default('.---'), js.ops      | default('.---'), true),
+                ('wRC+',  rs.wrc_plus | default('N/A'),  js.wrc_plus | default('N/A'),  true),
+                ('fWAR',  rs.fwar     | default('N/A'),  js.fwar     | default('N/A'),  true),
+                ('HR',    rs.hr       | default(0),      js.hr       | default(0),      true),
+                ('RBI',   rs.rbi      | default(0),      js.rbi      | default(0),      true),
+                ('R',     rs.runs     | default(0),      js.runs     | default(0),      true),
+                ('H',     rs.hits     | default(0),      js.hits     | default(0),      true),
+                ('SB',    rs.sb       | default(0),      js.sb       | default(0),      true),
+                ('BB',    rs.bb       | default(0),      js.bb       | default(0),      true),
+                ('G',     rs.games    | default(0),      js.games    | default(0),      true),
+              ] %}
+
+              {% for stat_label, r_val, j_val, higher_better in season_stats %}
+              {% set r_num = r_val | float %}
+              {% set j_num = j_val | float %}
+              {% set roman_wins = (r_num > j_num and higher_better) or (r_num < j_num and not higher_better) %}
+              {% set judge_wins = (j_num > r_num and higher_better) or (j_num < r_num and not higher_better) %}
+              <tr>
+                <td style="padding:7px 0;text-align:left;font-size:14px;color:{{ '#BD3039' if roman_wins else '#a0a0a0' }};font-weight:{{ '700' if roman_wins else '400' }};border-bottom:1px solid #1a1a1a">
+                  {{ r_val }}{{ ' ▲' if roman_wins else '' }}
+                </td>
+                <td style="padding:7px 0;text-align:center;font-size:11px;color:#555;border-bottom:1px solid #1a1a1a">{{ stat_label }}</td>
+                <td style="padding:7px 0;text-align:right;font-size:14px;color:{{ '#4b74cc' if judge_wins else '#a0a0a0' }};font-weight:{{ '700' if judge_wins else '400' }};border-bottom:1px solid #1a1a1a">
+                  {{ '▲ ' if judge_wins else '' }}{{ j_val }}
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── MVP Odds ────────────────────────────────────────────────────── -->
+        <tr>
+          <td style="background:#161616;border:1px solid #2a2a2a;border-top:1px solid #2a2a2a;border-bottom:none;padding:24px 32px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#555;margin-bottom:16px;border-bottom:1px solid #2a2a2a;padding-bottom:10px">
+              💰 AL MVP Odds
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td width="48%" style="background:rgba(189,48,57,0.1);border:1px solid rgba(189,48,57,0.3);border-radius:8px;padding:16px;text-align:center">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#BD3039;margin-bottom:6px">Roman Anthony</div>
+                  <div style="font-size:28px;font-weight:900;color:#BD3039">{{ odds.roman.odds | default('N/A') }}</div>
+                  <div style="font-size:11px;color:#666;margin-top:4px">{{ odds.roman.implied_prob | default('') }}% implied</div>
+                  {% if odds.roman.source == 'manual' %}
+                  <div style="font-size:10px;color:#444;margin-top:2px">(manual entry)</div>
+                  {% endif %}
+                </td>
+                <td width="4%"></td>
+                <td width="48%" style="background:rgba(0,48,135,0.1);border:1px solid rgba(0,48,135,0.3);border-radius:8px;padding:16px;text-align:center">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#4b74cc;margin-bottom:6px">Aaron Judge</div>
+                  <div style="font-size:28px;font-weight:900;color:#4b74cc">{{ odds.judge.odds | default('N/A') }}</div>
+                  <div style="font-size:11px;color:#666;margin-top:4px">{{ odds.judge.implied_prob | default('') }}% implied</div>
+                  {% if odds.judge.source == 'manual' %}
+                  <div style="font-size:10px;color:#444;margin-top:2px">(manual entry)</div>
+                  {% endif %}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── Trash Talk ──────────────────────────────────────────────────── -->
+        <tr>
+          <td style="background:#161616;border:1px solid #2a2a2a;border-top:1px solid #2a2a2a;border-bottom:none;padding:24px 32px">
+            <div style="background:#111;border-left:3px solid
+              {% if score.leader | default('tied') == 'roman' %}#BD3039{% elif score.leader | default('tied') == 'judge' %}#4b74cc{% else %}#f59e0b{% endif %};
+              padding:16px 20px;border-radius:0 8px 8px 0">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#555;margin-bottom:8px">💬 This Week's Take</div>
+              <div style="font-size:15px;color:#f0f0f0;line-height:1.6">{{ trash_talk }}</div>
+            </div>
+          </td>
+        </tr>
+
+        <!-- ── Footer ─────────────────────────────────────────────────────── -->
+        <tr>
+          <td style="background:#111;border:1px solid #2a2a2a;border-top:1px solid #2a2a2a;border-radius:0 0 16px 16px;padding:20px 32px;text-align:center">
+            <div style="font-size:11px;color:#444">
+              Roman vs Judge Bet Tracker · {{ season }} Season<br>
+              <span style="color:#333">Automated weekly report · Sent every Monday morning</span>
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

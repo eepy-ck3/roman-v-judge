@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roman vs Judge — Bet Tracker</title>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <!-- Chart.js for trend charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Chart.js date adapter (needed for time-axis charts) -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+  <style>
+    /* Inline critical CSS to prevent flash of unstyled content */
+    body { background: #0d0d0d; }
+    .initial-loader {
+      display: flex; align-items: center; justify-content: center;
+      height: 100vh; flex-direction: column; gap: 16px; color: #666;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Header ─────────────────────────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="container">
+    <h1>⚾ Roman vs. Judge</h1>
+    <div class="subtitle">Season-long bet tracker · Who's walking away with bragging rights? 🤔</div>
+    <div class="last-updated" id="last-updated">Loading...</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ─── Bet Score Banner ──────────────────────────────────────────────────── -->
+  <div class="bet-banner mb-4" id="bet-banner">
+    <div class="loading"><div class="spinner"></div>Loading matchup...</div>
+  </div>
+
+  <!-- ─── Head-to-Head Stats ───────────────────────────────────────────────── -->
+  <div class="mb-4">
+    <div class="section-heading">
+      <span class="icon">📊</span> Season Stats
+    </div>
+    <div class="card" id="stats-error">
+      <div class="card-header">
+        <h2>Head-to-Head</h2>
+        <span class="text-xs text-muted">Updated daily · WAR + wRC+ via FanGraphs</span>
+      </div>
+      <div class="card-body" style="padding: 0">
+        <table class="stat-table">
+          <thead>
+            <tr>
+              <th class="roman-col">Roman Anthony<br><span style="font-size:0.65rem;font-weight:400">Boston Red Sox</span></th>
+              <th class="stat-col">STAT</th>
+              <th class="judge-col">Aaron Judge<br><span style="font-size:0.65rem;font-weight:400">New York Yankees</span></th>
+            </tr>
+          </thead>
+          <tbody id="stat-table-body">
+            <tr><td colspan="3"><div class="loading"><div class="spinner"></div>Loading stats...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Schedule Panels ──────────────────────────────────────────────────── -->
+  <div class="mb-4">
+    <div class="section-heading">
+      <span class="icon">📅</span> Schedule &amp; Recent Games
+    </div>
+    <div class="schedule-grid">
+      <!-- Roman Schedule -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Roman Anthony · <span class="text-roman">BOS</span></h2>
+        </div>
+        <div class="card-body" id="schedule-roman">
+          <div class="loading"><div class="spinner"></div>Loading...</div>
+        </div>
+      </div>
+
+      <!-- Judge Schedule -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Aaron Judge · <span class="text-judge">NYY</span></h2>
+        </div>
+        <div class="card-body" id="schedule-judge">
+          <div class="loading"><div class="spinner"></div>Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Recent Game Logs ─────────────────────────────────────────────────── -->
+  <div class="mb-4">
+    <div class="section-heading">
+      <span class="icon">🎮</span> Last 5 Games
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <h2>Roman · Last 5</h2>
+          <span class="badge badge-roman">BOS</span>
+        </div>
+        <div class="card-body" id="gamelog-roman">
+          <div class="loading"><div class="spinner"></div>Loading...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Judge · Last 5</h2>
+          <span class="badge badge-judge">NYY</span>
+        </div>
+        <div class="card-body" id="gamelog-judge">
+          <div class="loading"><div class="spinner"></div>Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── MVP Race ─────────────────────────────────────────────────────────── -->
+  <div class="mb-4">
+    <div class="section-heading">
+      <span class="icon">🏅</span> AL MVP Race
+    </div>
+    <div class="grid-2">
+      <!-- Odds cards -->
+      <div class="card">
+        <div class="card-header">
+          <h2>MVP Odds</h2>
+          <span class="text-xs text-muted">American odds · implied probability</span>
+        </div>
+        <div class="card-body">
+          <div class="mvp-odds-grid">
+            <div class="odds-card roman" id="odds-roman">
+              <div class="odds-player-name">Roman Anthony</div>
+              <div class="odds-value">...</div>
+              <div class="odds-prob"></div>
+              <div class="odds-source"></div>
+            </div>
+            <div class="odds-card judge" id="odds-judge">
+              <div class="odds-player-name">Aaron Judge</div>
+              <div class="odds-value">...</div>
+              <div class="odds-prob"></div>
+              <div class="odds-source"></div>
+            </div>
+          </div>
+
+          <!-- Manual odds update form -->
+          <hr class="divider">
+          <div class="text-xs text-muted mb-4">
+            📝 Odds API doesn't always have futures. Update manually from any sportsbook:
+          </div>
+          <div class="manual-update-form">
+            <div class="form-group">
+              <label class="form-label">Judge Odds</label>
+              <input class="form-input" id="manual-judge-odds" placeholder="+200" maxlength="8">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Roman Odds</label>
+              <input class="form-input" id="manual-roman-odds" placeholder="+2500" maxlength="8">
+            </div>
+            <button class="btn btn-primary" onclick="updateOddsManually()">Update</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MVP Leaderboard -->
+      <div class="card">
+        <div class="card-header">
+          <h2>AL MVP Leaderboard</h2>
+          <span class="text-xs text-muted">By implied probability</span>
+        </div>
+        <div class="card-body" style="padding: 12px 16px">
+          <div id="mvp-leaderboard">
+            <div class="loading"><div class="spinner"></div>Loading...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Season Trend Charts ───────────────────────────────────────────────── -->
+  <div class="charts-section mb-4">
+    <div class="section-heading">
+      <span class="icon">📈</span> Season Trends
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h2>Cumulative Season Stats</h2>
+        <div class="chart-tabs">
+          <button class="chart-tab active" data-metric="ops" onclick="loadTrends('ops')">OPS</button>
+          <button class="chart-tab" data-metric="hr" onclick="loadTrends('hr')">HR</button>
+          <button class="chart-tab" data-metric="avg" onclick="loadTrends('avg')">AVG</button>
+          <button class="chart-tab" data-metric="rbi" onclick="loadTrends('rbi')">RBI</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-container" id="chart-container">
+          <div class="loading"><div class="spinner"></div>Loading chart...</div>
+        </div>
+        <div class="text-xs text-muted" style="margin-top: 10px">
+          Cumulative season-to-date. Rate stats (OPS, AVG) are season averages at each game.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── How the Score Works ──────────────────────────────────────────────── -->
+  <div class="mb-4">
+    <div class="card">
+      <div class="card-header">
+        <h2>How the Bet Score Works</h2>
+      </div>
+      <div class="card-body">
+        <div class="text-sm" style="color: var(--text-secondary); line-height: 1.7">
+          <p>The "Bet Score" is a weighted formula designed to mirror how MVP voters actually think:</p>
+          <br>
+          <div class="grid-3" style="gap: 8px">
+            <div><strong class="text-roman">fWAR · 25%</strong><br><span class="text-xs text-muted">The holy grail. Captures everything — offense, defense, baserunning. MVP voters use it even if they call it "eye test."</span></div>
+            <div><strong class="text-roman">wRC+ · 20%</strong><br><span class="text-xs text-muted">Park and league-adjusted offensive production. 100 = league avg. 170 = stupid good.</span></div>
+            <div><strong class="text-roman">HR · 18%</strong><br><span class="text-xs text-muted">Voters LOVE dingers. Judge won his MVP by hitting 62. Unfair? Sure. Reality? Also yes.</span></div>
+            <div><strong class="text-roman">OPS · 15%</strong><br><span class="text-xs text-muted">Classic power + patience combo. Easy to understand, hard to fake.</span></div>
+            <div><strong class="text-roman">RBI · 10%</strong><br><span class="text-xs text-muted">Context-dependent, kinda unfair, but voters care and we're not pretending otherwise.</span></div>
+            <div><strong class="text-roman">Runs + SB · 12%</strong><br><span class="text-xs text-muted">Rounds out the offensive picture. Roman is faster — this is where he gains ground.</span></div>
+          </div>
+          <br>
+          <p>Each stat is compared between the two players. The winner's share of the "total value" in each category gets weighted and summed. Scores always add up to 100.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Admin Panel ───────────────────────────────────────────────────────── -->
+  <div class="mb-4">
+    <div class="card">
+      <div class="card-header">
+        <h2>⚙️ Controls</h2>
+      </div>
+      <div class="card-body flex gap-2" style="flex-wrap: wrap;">
+        <button class="btn btn-primary" onclick="loadAll()">🔄 Refresh Data</button>
+        <button class="btn btn-primary" onclick="triggerReport()">📧 Send Weekly Report Now</button>
+        <button class="btn btn-primary" onclick="fetch('/api/cache/clear',{method:'POST'}).then(()=>showToast('Cache cleared!'))">🗑️ Clear Cache</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ─── Toast Notifications ───────────────────────────────────────────────── -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

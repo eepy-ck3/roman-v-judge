@@ -1,0 +1,60 @@
+# render.yaml — Deploy to Render.com with one click
+# Connect your GitHub repo at: dashboard.render.com/new/web
+# Or use: render deploy --config render.yaml
+
+services:
+  - type: web
+    name: roman-vs-judge
+    env: python
+    region: oregon         # or ohio, singapore, frankfurt
+    plan: free             # Free tier — 750 hrs/month, sleeps after 15min inactivity
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      # Add all your secrets in the Render dashboard under Environment
+      # DO NOT put actual values here — this file goes in git
+      - key: ROMAN_PLAYER_ID
+        sync: false
+      - key: JUDGE_PLAYER_ID
+        sync: false
+      - key: ROMAN_TEAM_ID
+        sync: false
+      - key: JUDGE_TEAM_ID
+        sync: false
+      - key: ROMAN_FANGRAPHS_ID
+        sync: false
+      - key: JUDGE_FANGRAPHS_ID
+        sync: false
+      - key: YOUR_NAME
+        sync: false
+      - key: BROTHER_NAME
+        sync: false
+      - key: YOUR_EMAIL
+        sync: false
+      - key: BROTHER_EMAIL
+        sync: false
+      - key: YOUR_PHONE
+        sync: false
+      - key: BROTHER_PHONE
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: ODDS_API_KEY
+        sync: false
+      - key: MANUAL_JUDGE_ODDS
+        sync: false
+      - key: MANUAL_ROMAN_ODDS
+        sync: false
+      - key: SEASON
+        value: "2025"
